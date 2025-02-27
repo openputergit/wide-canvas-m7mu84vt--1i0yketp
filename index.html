@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Changa Po - 3D Board Game</title>
+    <script src="https://unpkg.com/tailwindcss-jit-cdn"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;800&display=swap" rel="stylesheet">
+    <style>
+        * {
+            font-family: 'Poppins', sans-serif;
+        }
+        .game-cell {
+            transition: all 0.3s ease;
+            transform-style: preserve-3d;
+            perspective: 1000px;
+        }
+        .game-cell.selected {
+            transform: translateZ(20px);
+            box-shadow: 0 0 20px rgba(0,0,0,0.2);
+        }
+        .piece {
+            transition: all 0.3s ease;
+        }
+        .piece:hover {
+            transform: scale(1.1);
+        }
+        .board-3d {
+            transform: perspective(1000px) rotateX(25deg);
+        }
+    </style>
+</head>
+<body class="bg-gray-900 min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+        <div class="text-center mb-8">
+            <h1 class="text-4xl font-bold text-white mb-2">Changa Po</h1>
+            <p class="text-gray-300">Level: <span id="currentLevel">1</span>/50</p>
+            <div class="flex justify-center gap-4 mt-4">
+                <button id="prevLevel" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">Previous Level</button>
+                <button id="nextLevel" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700">Next Level</button>
+            </div>
+        </div>
+
+        <div class="board-3d max-w-md mx-auto bg-gray-800 p-4 rounded-xl">
+            <div id="gameBoard" class="grid grid-cols-5 gap-2 w-full aspect-square"></div>
+        </div>
+
+        <div class="mt-8 text-center">
+            <p class="text-gray-300 mb-4">Moves: <span id="moves">0</span></p>
+            <button id="resetLevel" class="bg-red-600 text-white px-6 py-2 rounded-lg hover:bg-red-700">Reset Level</button>
+        </div>
+    </div>
+
+    <script>
+        const colors = {
+            'red': 'bg-red-500',
+            'blue': 'bg-blue-500',
+            'green': 'bg-green-500',
+            'yellow': 'bg-yellow-500'
+        };
+
+        let currentLevel = 1;
+        let moves = 0;
+        let selectedPiece = null;
+        let gameState = {};
+
+        function initializeLevel(level) {
+            // Different configurations for different levels
+            gameState = {
+                board: Array(25).fill(null),
+                pieces: {
+                    red: [1, 2],
+                    blue: [5, 10],
+                    green: [20, 24],
+                    yellow: [12, 17]
+                }
+            };
+
+            // Modify piece positions based on level
+            if (level > 1) {
+                Object.keys(gameState.pieces).forEach(color => {
+                    gameState.pieces[color] = gameState.pieces[color].map(pos => 
+                        (pos + level) % 25
+                    );
+                });
+            }
+
+            renderBoard();
+            updateUI();
+        }
+
+        function renderBoard() {
+            const board = document.getElementById('gameBoard');
+            board.innerHTML = '';
+
+            for (let i = 0; i < 25; i++) {
+                const cell = document.createElement('div');
+                cell.className = 'game-cell bg-gray-700 rounded-lg aspect-square flex items-center justify-center cursor-pointer';
+                cell.dataset.index = i;
+
+                // Add pieces
+                Object.entries(gameState.pieces).forEach(([color, positions]) => {
+                    if (positions.includes(i)) {
+                        const piece = document.createElement('div');
+                        piece.className = `piece w-4/5 h-4/5 rounded-full ${colors[color]} cursor-pointer`;
+                        piece.dataset.color = color;
+                        cell.appendChild(piece);
+                    }
+                });
+
+                cell.addEventListener('click', handleCellClick);
+                board.appendChild(cell);
+            }
+        }
+
+        function handleCellClick(e) {
+            const cell = e.target.closest('.game-cell');
+            const piece = e.target.classList.contains('piece') ? e.target : null;
+            const index = parseInt(cell.dataset.index);
+
+            if (piece && !selectedPiece) {
+                selectedPiece = {
+                    color: piece.dataset.color,
+                    index: index
+                };
+                cell.classList.add('selected');
+            } else if (selectedPiece) {
+                if (isValidMove(selectedPiece.index, index)) {
+                    movePiece(selectedPiece.index, index);
+                    moves++;
+                    updateUI();
+                }
+                document.querySelector('.selected')?.classList.remove('selected');
+                selectedPiece = null;
+            }
+        }
+
+        function isValidMove(from, to) {
+            const validMoves = [
+                from - 5, from + 5,  // vertical
+                from - 1, from + 1,  // horizontal
+                from - 6, from + 6,  // diagonal
+                from - 4, from + 4   // diagonal
+            ].filter(pos => pos >= 0 && pos < 25);
+
+            return validMoves.includes(to) && !isPieceAt(to);
+        }
+
+        function isPieceAt(index) {
+            return Object.values(gameState.pieces).some(positions => 
+                positions.includes(index)
+            );
+        }
+
+        function movePiece(from, to) {
+            const color = selectedPiece.color;
+            gameState.pieces[color] = gameState.pieces[color].map(pos => 
+                pos === from ? to : pos
+            );
+            renderBoard();
+        }
+
+        function updateUI() {
+            document.getElementById('currentLevel').textContent = currentLevel;
+            document.getElementById('moves').textContent = moves;
+        }
+
+        // Event Listeners
+        document.getElementById('prevLevel').addEventListener('click', () => {
+            if (currentLevel > 1) {
+                currentLevel--;
+                moves = 0;
+                initializeLevel(currentLevel);
+            }
+        });
+
+        document.getElementById('nextLevel').addEventListener('click', () => {
+            if (currentLevel < 50) {
+                currentLevel++;
+                moves = 0;
+                initializeLevel(currentLevel);
+            }
+        });
+
+        document.getElementById('resetLevel').addEventListener('click', () => {
+            moves = 0;
+            initializeLevel(currentLevel);
+        });
+
+        // Initialize game
+        initializeLevel(currentLevel);
+    </script>
+<script>document.body.addEventListener('wheel', e => { if (!e.ctrlKey) return; e.preventDefault(); return }, { passive: false })</script>
+	</body>
+</html>
